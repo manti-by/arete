@@ -45,7 +45,7 @@ class Enhancer:
         device: str = "cpu",
         use_ema: bool = True,
     ) -> Enhancer:
-        state = torch.load(checkpoint_path, map_location=device)
+        state = torch.load(checkpoint_path, map_location=device, weights_only=True)
         key = "ema" if (use_ema and "ema" in state) else "model"
         model.load_state_dict(state[key])
         return cls(model, sample_rate, chunk_seconds, hop_seconds, device)

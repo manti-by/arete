@@ -159,7 +159,12 @@ class Degrader:
                 *codec_args,
                 tmp_path,
             ]
-            subprocess.run(cmd, capture_output=True, check=True)
+            try:
+                subprocess.run(cmd, capture_output=True, check=True)  # nosec B603
+            except Exception:
+                Path(tmp_path).unlink(missing_ok=True)
+                Path(tmp_in.name).unlink(missing_ok=True)
+                raise
 
         # Re-decode to wav via ffmpeg pipe
         cmd2 = [
@@ -175,7 +180,12 @@ class Degrader:
             "wav",
             "-",
         ]
-        result = subprocess.run(cmd2, capture_output=True, check=True)
+        try:
+            result = subprocess.run(cmd2, capture_output=True, check=True)  # nosec B603
+        except Exception:
+            Path(tmp_path).unlink(missing_ok=True)
+            Path(tmp_in.name).unlink(missing_ok=True)
+            raise
 
         audio_out, _ = sf.read(io.BytesIO(result.stdout))
         if audio_out.ndim == 1:
@@ -207,10 +217,14 @@ class Degrader:
                 "wav",
                 "-",
             ]
-            r = subprocess.run(cmd_down, capture_output=True, check=True)
-            mid, _ = sf.read(io.BytesIO(r.stdout))
-            if mid.ndim == 1:
-                mid = mid[:, np.newaxis]
+            try:
+                r = subprocess.run(cmd_down, capture_output=True, check=True)  # nosec B603
+                mid, _ = sf.read(io.BytesIO(r.stdout))
+                if mid.ndim == 1:
+                    mid = mid[:, np.newaxis]
+            except Exception:
+                Path(f_in.name).unlink(missing_ok=True)
+                raise
 
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_mid:
             sf.write(f_mid.name, mid, target_sr)
@@ -227,10 +241,15 @@ class Degrader:
                 "wav",
                 "-",
             ]
-            r = subprocess.run(cmd_up, capture_output=True, check=True)
-            out, _ = sf.read(io.BytesIO(r.stdout))
-            if out.ndim == 1:
-                out = out[:, np.newaxis]
+            try:
+                r = subprocess.run(cmd_up, capture_output=True, check=True)  # nosec B603
+                out, _ = sf.read(io.BytesIO(r.stdout))
+                if out.ndim == 1:
+                    out = out[:, np.newaxis]
+            except Exception:
+                Path(f_mid.name).unlink(missing_ok=True)
+                Path(f_in.name).unlink(missing_ok=True)
+                raise
 
         Path(f_mid.name).unlink(missing_ok=True)
         Path(f_in.name).unlink(missing_ok=True)

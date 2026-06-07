@@ -10,6 +10,7 @@ authors = [{ name = "Alexander Chaika" }]
 dependencies = [
     "torch>=2.3.0",
     "torchaudio>=2.3.0",
+    "torchcodec>=0.13.0",
     "librosa>=0.10.2",
     "soundfile>=0.12.1",
     "auraloss>=0.4.0",
@@ -101,7 +102,7 @@ norecursedirs = [
 
 [tool.bandit]
 exclude_dirs = ["tests/"]
-skips = ["B101", "B308", "B703"]
+skips = ["B101", "B308", "B311", "B703"]
 
 [dependency-groups]
 dev = [

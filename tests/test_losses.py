@@ -2,6 +2,7 @@ import torch
 
 from audio_upscaler.losses import CombinedAudioLoss
 
+
 BATCH = 2
 SAMPLES = 16000
 
