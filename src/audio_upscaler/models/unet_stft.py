@@ -1,0 +1,127 @@
+"""STFT-domain U-Net (Baseline A).
+
+Operates on log-magnitude spectrograms. Phase is taken from the input
+and combined with the predicted magnitude via Griffin-Lim or direct ISTFT.
+
+Forward:
+    x  : (B, C, T)  — degraded waveform
+    out: (B, C, T)  — restored waveform
+"""
+
+from __future__ import annotations
+
+import torch
+import torch.nn as nn
+import torchaudio.transforms as T
+
+
+class DoubleConv2d(nn.Module):
+    def __init__(self, in_ch: int, out_ch: int) -> None:
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
+
+
+class STFTUNet(nn.Module):
+    """2-D U-Net on magnitude spectrogram.
+
+    Args:
+        n_fft:       FFT size
+        hop_length:  STFT hop
+        base_ch:     base feature channels
+        depth:       encoder depth
+    """
+
+    def __init__(
+        self,
+        n_fft: int = 2048,
+        hop_length: int = 512,
+        sample_rate: int = 44100,
+        base_ch: int = 32,
+        depth: int = 4,
+    ) -> None:
+        super().__init__()
+        self.n_fft = n_fft
+        self.hop_length = hop_length
+
+        # STFT / ISTFT
+        self.stft = T.Spectrogram(n_fft=n_fft, hop_length=hop_length, power=None)
+        self.griffin_lim = T.GriffinLim(n_fft=n_fft, hop_length=hop_length)
+
+        # 2-D U-Net
+        self.depth = depth
+        enc_chs = [1] + [base_ch * (2**i) for i in range(depth)]
+        self.encoders = nn.ModuleList(
+            [DoubleConv2d(enc_chs[i], enc_chs[i + 1]) for i in range(depth)]
+        )
+        self.pool = nn.MaxPool2d(2)
+
+        self.bottleneck = DoubleConv2d(enc_chs[-1], enc_chs[-1] * 2)
+
+        dec_chs = list(reversed(enc_chs[1:]))
+        self.up_convs = nn.ModuleList(
+            [
+                nn.ConvTranspose2d(enc_chs[-1] * 2 if i == 0 else dec_chs[i - 1], dec_chs[i], 2, 2)
+                for i in range(depth)
+            ]
+        )
+        self.decoders = nn.ModuleList(
+            [DoubleConv2d(dec_chs[i] + dec_chs[i], dec_chs[i]) for i in range(depth)]
+        )
+
+        self.out_conv = nn.Conv2d(dec_chs[-1], 1, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: (B, 1, T) → mono assumed
+        *_, n_t = x.shape
+        wav = x.squeeze(1)  # (B, T)
+
+        # STFT → complex → magnitude / phase
+        spec_complex = self.stft(wav)  # (B, F, frames, 2) or complex
+        mag = spec_complex.abs()  # (B, F, frames)
+        phase = spec_complex.angle()
+
+        log_mag = torch.log1p(mag).unsqueeze(1)  # (B, 1, F, frames)
+
+        # Encoder
+        skips: list[torch.Tensor] = []
+        h = log_mag
+        for enc in self.encoders:
+            h = enc(h)
+            skips.append(h)
+            h = self.pool(h)
+
+        h = self.bottleneck(h)
+
+        # Decoder
+        for up, dec, skip in zip(self.up_convs, self.decoders, reversed(skips), strict=True):
+            h = up(h)
+            # Pad if shapes differ
+            dy = skip.shape[2] - h.shape[2]
+            dx = skip.shape[3] - h.shape[3]
+            if dy > 0 or dx > 0:
+                h = torch.nn.functional.pad(h, (0, dx, 0, dy))
+            h = torch.cat([h, skip], dim=1)
+            h = dec(h)
+
+        pred_log_mag = self.out_conv(h).squeeze(1)  # (B, F, frames)
+        pred_mag = torch.expm1(pred_log_mag.clamp(min=-10))
+
+        # Reconstruct waveform using predicted magnitude + input phase
+        pred_complex = torch.polar(pred_mag, phase)
+        restored = torch.istft(
+            pred_complex,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            length=n_t,
+        )
+        return restored.unsqueeze(1)  # (B, 1, T)
