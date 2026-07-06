@@ -1,14 +1,24 @@
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
-from audio_upscaler.models import WaveformUNet
-from audio_upscaler.training import Trainer
+from arete.models import WaveformUNet
+from arete.services import Trainer
+
+
+class _DummyDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
+    def __init__(self, size: int = 6) -> None:
+        self.data = [(torch.randn(1, 16000), torch.randn(1, 16000)) for _ in range(size)]
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.data[index]
 
 
 def _dummy_loader(batch_size: int = 2, n_batches: int = 3) -> DataLoader:
-    """Create a DataLoader yielding random (degraded, clean) pairs."""
-    data = [(torch.randn(1, 16000), torch.randn(1, 16000)) for _ in range(batch_size * n_batches)]
-    return DataLoader(data, batch_size=batch_size)
+    dataset = _DummyDataset(size=batch_size * n_batches)
+    return DataLoader(dataset, batch_size=batch_size)
 
 
 CONFIG = {
@@ -75,7 +85,7 @@ class TestTrainer:
         train_loader = _dummy_loader()
         val_loader = _dummy_loader(n_batches=1)
         trainer = Trainer(model, train_loader, val_loader, cfg, device="cpu")
-        assert trainer.scaler.is_enabled() is False  # disabled on cpu regardless
+        assert trainer.scaler.is_enabled() is False
 
     def test_fit_one_epoch(self) -> None:
         model = WaveformUNet(in_channels=1, base_channels=8, depth=2)
@@ -83,7 +93,6 @@ class TestTrainer:
         val_loader = _dummy_loader(n_batches=1)
         trainer = Trainer(model, train_loader, val_loader, CONFIG, device="cpu")
         trainer.fit()
-        # After training, checkpoint should be saved
         ckpt = trainer.ckpt_dir / "checkpoint_epoch_final.pt"
         assert ckpt.exists()
         ckpt.unlink(missing_ok=True)
@@ -95,10 +104,10 @@ class TestTrainer:
         train_loader = _dummy_loader()
         val_loader = _dummy_loader(n_batches=1)
         trainer = Trainer(model, train_loader, val_loader, CONFIG, device="cpu")
-        trainer._save_checkpoint(42)
+        trainer.save_checkpoint(42)
         ckpt = trainer.ckpt_dir / "checkpoint_epoch_42.pt"
         assert ckpt.exists()
-        state = torch.load(ckpt, map_location="cpu")
+        state = torch.load(ckpt, map_location="cpu", weights_only=True)
         assert "model" in state
         assert "optimizer" in state
         assert "epoch" in state

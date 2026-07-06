@@ -1,6 +1,6 @@
 import torch
 
-from audio_upscaler.models import EMA, STFTUNet, WaveformUNet
+from arete.models import EMA, STFTUNet, WaveformUNet
 
 
 BATCH = 2
@@ -8,9 +8,7 @@ CHANNELS = 1
 SAMPLES = 44100
 
 
-def make_dummy(
-    batch: int = BATCH, channels: int = CHANNELS, samples: int = SAMPLES
-) -> torch.Tensor:
+def make_dummy(batch: int = BATCH, channels: int = CHANNELS, samples: int = SAMPLES) -> torch.Tensor:
     return torch.randn(batch, channels, samples)
 
 
@@ -131,7 +129,6 @@ class TestEMA:
                 p.add_(torch.ones_like(p))
 
         ema.update(model)
-        # With decay=0, shadow should fully update to model
         for s, p in zip(ema.shadow.parameters(), model.parameters(), strict=True):
             assert torch.allclose(s, p), "With decay=0, shadow should match model"
 
@@ -139,9 +136,7 @@ class TestEMA:
         model = WaveformUNet(in_channels=1, base_channels=8, depth=2)
         ema = EMA(model, decay=0.9)
         with ema.average_parameters():
-            # Should not raise
             pass
-        # After context, shadow state should still be usable
         x = make_dummy(batch=1, samples=8192)
         with torch.no_grad():
             y = ema.shadow(x)

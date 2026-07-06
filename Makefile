@@ -1,35 +1,34 @@
-install:
-	uv sync --extra dev
-
-install-all:
-	uv sync --extra dev --extra demucs
-
-lint:
-	uv run ruff check src/ tests/ scripts/
-
-format:
-	uv run ruff format src/ tests/ scripts/
+SHELL := /bin/bash
 
 check:
-	uv run pre-commit run --all-files
+	git add .
+	uv run ty check
+	uv run pre-commit run
 
-test:
-	uv run pytest
-
-test-cov:
-	uv run pytest --cov=audio_upscaler --cov-report=term-missing
-
-train:
-	uv run audio-upscaler train --data-dir data/raw
-
-info:
-	uv run audio-upscaler info
-
-validate:
-	uv run python scripts/prepare_dataset.py --data-dir data/raw
+install:
+	uv sync --all-extras --dev
 
 update:
-	uv sync --upgrade
+	uv run uv-bump
+	uv sync --all-extras --dev
 	uv run pre-commit autoupdate
 
-ci: install lint test
+test:
+	uv run pytest tests/
+
+test-cov:
+	uv run pytest tests/ --cov=arete --cov-report=term-missing --cov-report=html
+
+train:
+	uv run python main.py train --data-dir data/raw --model-type waveform
+
+info:
+	uv run python main.py info
+
+enhance:
+	uv run python main.py enhance --checkpoint <ckpt> --input <file> --output <out>
+
+validate:
+	uv run python main.py validate --data-dir data/raw
+
+ci: install check test

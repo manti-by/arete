@@ -1,6 +1,6 @@
 import torch
 
-from audio_upscaler.losses import CombinedAudioLoss
+from arete.losses import CombinedAudioLoss
 
 
 BATCH = 2
@@ -23,8 +23,6 @@ class TestCombinedAudioLoss:
         _, components = loss_fn(pred, target)
         for key in ("l_time", "l_mr_stft", "l_mel", "l_highband", "total"):
             assert key in components, f"Missing component: {key}"
-        for v in components.values():
-            assert v is not None and v != float("nan"), f"Component {key} is nan"
 
     def test_perfect_prediction_lower_loss(self) -> None:
         loss_fn = CombinedAudioLoss(sample_rate=16000)
@@ -36,9 +34,7 @@ class TestCombinedAudioLoss:
 
         assert perfect_loss.isfinite(), "Perfect loss should not be nan"
         assert bad_loss.isfinite(), "Bad loss should not be nan"
-        assert perfect_loss.item() < bad_loss.item(), (
-            "Loss on perfect prediction should be lower than on random noise"
-        )
+        assert perfect_loss.item() < bad_loss.item(), "Loss on perfect prediction should be lower than on random noise"
 
     def test_loss_backward(self) -> None:
         loss_fn = CombinedAudioLoss(sample_rate=16000)
@@ -50,7 +46,6 @@ class TestCombinedAudioLoss:
         assert pred.grad.shape == pred.shape
 
     def test_loss_l1_only_if_mel_loss_none(self) -> None:
-        """When mel_loss is None (fallback mode), l_mel should equal l_mr."""
         loss_fn = CombinedAudioLoss(sample_rate=16000)
         loss_fn.mel_loss = None
         pred = torch.randn(BATCH, 1, SAMPLES)

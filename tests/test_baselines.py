@@ -1,6 +1,6 @@
 import torch
 
-from audio_upscaler.baselines import harmonic_bwe, upsample_baseline, wiener_denoise
+from arete.baselines import harmonic_bwe, upsample_baseline, wiener_denoise
 
 
 SR = 22050

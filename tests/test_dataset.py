@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from audio_upscaler.data import AudioPairDataset
+from arete.data import AudioPairDataset
 
 
 SR = 22050
@@ -50,9 +50,7 @@ class TestAudioPairDataset:
 
     def test_explicit_file_list(self, tmp_path: Path) -> None:
         files = make_temp_audio(tmp_path, n=1)
-        ds = AudioPairDataset(
-            root=tmp_path, sample_rate=SR, chunk_seconds=1.0, mono=True, files=files
-        )
+        ds = AudioPairDataset(root=tmp_path, sample_rate=SR, chunk_seconds=1.0, mono=True, files=files)
         assert len(ds) > 0
 
     def test_empty_directory_raises(self, tmp_path: Path) -> None:
@@ -62,7 +60,7 @@ class TestAudioPairDataset:
             AudioPairDataset(root=tmp_path, sample_rate=SR, chunk_seconds=1.0, mono=True)
 
     def test_make_train_val_datasets(self, tmp_path: Path) -> None:
-        from audio_upscaler.data.dataset import make_train_val_datasets
+        from arete.data.dataset import make_train_val_datasets
 
         make_temp_audio(tmp_path, n=5)
         train_ds, val_ds = make_train_val_datasets(

@@ -1,0 +1,16 @@
+from __future__ import annotations
+
+
+class AreteError(Exception): ...
+
+
+class ConfigError(AreteError): ...
+
+
+class DegradationError(AreteError): ...
+
+
+class TrainingError(AreteError): ...
+
+
+class EnhancementError(AreteError): ...

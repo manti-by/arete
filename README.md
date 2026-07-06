@@ -1,4 +1,4 @@
-# audio_upscaler
+# arete
 
 **DSEE-like audio restoration for music** — supervised neural model that restores high-frequency detail and removes compression artifacts from lossy audio (MP3 / AAC / Opus).
 
@@ -8,7 +8,7 @@ Trained on pairs of `(degraded, clean)` audio generated on-the-fly from your los
 
 ## Motivation
 
-Sony DSEE (Digital Sound Enhancement Engine) restores detail lost during compression. This project implements the same idea as a research/pet project:
+Sony DSEE (Digital Sound Enhancement Engine) restores detail lost during compression. arete implements the same idea as a research/pet project:
 
 - Input: compressed / artifact-ridden audio
 - Output: restored waveform with recovered high-frequency content
@@ -60,37 +60,43 @@ L = λ1·L_time + λ2·L_MR-STFT + λ3·L_mel + λ4·L_highband
 ## Project Structure
 
 ```
-audio_upscaler/
+arete/
+├── main.py                  # CLI entry point (argparse: train / enhance / info / validate)
 ├── configs/
-│   └── default.yaml          # all hyperparameters
+│   └── default.yaml         # all hyperparameters
+├── arete/
+│   ├── settings.py          # config loading from YAML + environment
+│   ├── library/             # pure data layer (dataclasses, TypedDicts, exceptions)
+│   ├── models/              # neural architectures
+│   │   ├── unet_waveform.py # Waveform residual U-Net
+│   │   ├── unet_stft.py     # STFT 2-D U-Net
+│   │   └── ema.py           # Exponential Moving Average
+│   ├── services/            # external system integrations
+│   │   ├── degradation.py   # ffmpeg-based on-the-fly degradations
+│   │   ├── enhancer.py      # Overlap-add inference engine
+│   │   ├── trainer.py       # Training loop + TensorBoard + EMA + AMP
+│   │   └── validation.py    # Dataset validation and summarisation
+│   ├── data/
+│   │   └── dataset.py       # AudioPairDataset + train/val split
+│   ├── losses/
+│   │   └── combined.py      # CombinedAudioLoss (auraloss-based)
+│   └── baselines/
+│       └── dsp.py           # Classical DSP baselines for comparison
 ├── data/
-│   ├── raw/                  # your lossless music (FLAC/WAV/AIFF)
-│   ├── degraded/             # optional pre-degraded cache
-│   └── processed/            # optional pre-chunked cache
-├── src/
-│   └── audio_upscaler/
-│       ├── models/
-│       │   ├── unet_waveform.py   # Waveform residual U-Net
-│       │   ├── unet_stft.py       # STFT 2-D U-Net
-│       │   └── ema.py             # Exponential Moving Average
-│       ├── data/
-│       │   ├── dataset.py         # AudioPairDataset + train/val split
-│       │   └── degradations.py    # ffmpeg-based on-the-fly degradations
-│       ├── losses/
-│       │   └── combined.py        # CombinedAudioLoss (auraloss-based)
-│       ├── training/
-│       │   └── trainer.py         # Training loop + TensorBoard + EMA + AMP
-│       ├── inference/
-│       │   └── enhancer.py        # Overlap-add inference engine
-│       ├── baselines/
-│       │   └── dsp.py             # Classical DSP baselines for comparison
-│       └── cli.py                 # Click CLI: train / enhance / info
+│   ├── raw/                 # your lossless music (FLAC/WAV/AIFF)
+│   ├── degraded/            # optional pre-degraded cache
+│   └── processed/           # optional pre-chunked cache
 ├── tests/
 │   ├── test_models.py
 │   ├── test_losses.py
 │   ├── test_dataset.py
-│   └── test_baselines.py
+│   ├── test_baselines.py
+│   ├── test_enhancer.py
+│   ├── test_trainer.py
+│   ├── test_degradations.py
+│   └── test_cli.py
 ├── pyproject.toml
+├── Makefile
 └── README.md
 ```
 
@@ -98,23 +104,16 @@ audio_upscaler/
 
 ## Installation
 
-Requires **Python ≥ 3.11**, [uv](https://github.com/astral-sh/uv), and **ffmpeg** in PATH.
+Requires **Python ≥ 3.13**, [uv](https://github.com/astral-sh/uv), and **ffmpeg** in PATH.
 
 ```bash
 # Install uv (if not already installed)
 curl -Lsf https://astral.sh/uv/install.sh | sh
 
-# Clone / unzip the project
-cd audio_upscaler
+cd arete
 
 # Create virtual environment and install dependencies
-uv sync
-
-# Install with dev extras (ruff, pytest)
-uv sync --extra dev
-
-# Optional: demucs support for stem-aware enhancement
-uv sync --extra demucs
+make install
 ```
 
 ---
@@ -125,7 +124,7 @@ uv sync --extra demucs
 
 ```bash
 # Put your lossless tracks in data/raw/
-uv run audio-upscaler train \
+uv run python main.py train \
     --data-dir data/raw \
     --model-type waveform \
     --device cuda
@@ -134,24 +133,29 @@ uv run audio-upscaler train \
 Training logs → `runs/` (TensorBoard), checkpoints → `checkpoints/`.
 
 ```bash
-# Monitor training
 tensorboard --logdir runs/
 ```
 
 ### Enhance a file
 
 ```bash
-uv run audio-upscaler enhance \
+uv run python main.py enhance \
     --checkpoint checkpoints/checkpoint_epoch_final.pt \
     --input my_track_128kbps.mp3 \
     --output my_track_enhanced.wav \
     --device cpu
 ```
 
+### Validate dataset
+
+```bash
+uv run python main.py validate --data-dir data/raw
+```
+
 ### Model info
 
 ```bash
-uv run audio-upscaler info
+uv run python main.py info
 ```
 
 ---
@@ -163,13 +167,13 @@ All hyperparameters live in `configs/default.yaml`. Key sections:
 ```yaml
 audio:
   sample_rate: 44100
-  channels: 1          # 1 = mono, 2 = stereo
+  channels: 1
   chunk_seconds: 2.5
 
 model:
   name: WaveformUNet
-  base_channels: 32    # increase for more capacity
-  depth: 5             # encoder/decoder levels
+  base_channels: 32
+  depth: 5
 
 training:
   epochs: 100
@@ -178,20 +182,33 @@ training:
   mixed_precision: true
 ```
 
+Override config path via `ARETE_CONFIG` environment variable.
+
 ---
 
 ## Development
 
 ```bash
-# Lint and format
-uv run ruff check src/ tests/
-uv run ruff format src/ tests/
+# Install dev dependencies
+make install
 
-# Tests
-uv run pytest
+# Lint, format, and type check
+make check
+
+# Run tests
+make test
 
 # Tests with coverage
-uv run pytest --cov=audio_upscaler --cov-report=term-missing
+make test-cov
+```
+
+Individual tools:
+
+```bash
+uv run ruff check .          # lint
+uv run ruff format .         # format
+uv run ty check              # type check
+uv run pytest tests/         # test
 ```
 
 ---
@@ -201,12 +218,13 @@ uv run pytest --cov=audio_upscaler --cov-report=term-missing
 | Step | Action |
 |------|--------|
 | 1 | Place lossless masters (FLAC/WAV) in `data/raw/` |
-| 2 | Run `audio-upscaler train --model-type waveform` |
-| 3 | Evaluate objective metrics: LSD, multi-resolution STFT loss on validation |
-| 4 | Listen on 20–30 held-out tracks across genres (electronic, acoustic, vocal) |
-| 5 | Switch to `--model-type stft` and compare |
-| 6 | Tune loss weights in `configs/default.yaml` if high-freq is over- or under-corrected |
-| 7 | Optional: add stem-aware pipeline via demucs |
+| 2 | Run `uv run python main.py validate --data-dir data/raw` |
+| 3 | Run `uv run python main.py train --model-type waveform` |
+| 4 | Evaluate objective metrics: LSD, multi-resolution STFT loss on validation |
+| 5 | Listen on 20–30 held-out tracks across genres (electronic, acoustic, vocal) |
+| 6 | Switch to `--model-type stft` and compare |
+| 7 | Tune loss weights in `configs/default.yaml` if high-freq is over- or under-corrected |
+| 8 | Optional: add stem-aware pipeline via demucs |
 
 ---
 
@@ -221,7 +239,7 @@ uv run pytest --cov=audio_upscaler --cov-report=term-missing
 
 ## DSP Baselines
 
-Located in `src/audio_upscaler/baselines/dsp.py`. Compare your model against:
+Located in `arete/baselines/dsp.py`. Compare your model against:
 
 | Baseline | Description |
 |----------|-------------|
@@ -250,6 +268,7 @@ Located in `src/audio_upscaler/baselines/dsp.py`. Compare your model against:
 | `ffmpeg` | On-the-fly codec degradations (MP3/AAC/Opus) |
 | `uv` | Fast Python packaging and virtual environments |
 | `ruff` | Linting and formatting |
+| `ty` | Type checking |
 
 ---
 

@@ -4,12 +4,10 @@ import soundfile as sf
 import torch
 import torch.nn as nn
 
-from audio_upscaler.inference import Enhancer
+from arete.services import Enhancer
 
 
 class IdentityModel(nn.Module):
-    """Identity model that returns input unchanged (for testing)."""
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x
 
@@ -35,7 +33,6 @@ class TestEnhancer:
         wav = torch.randn(1, 16000) * 0.1
         out = enh.enhance_waveform(wav)
         assert out.shape == wav.shape
-        # Overlap-add windowing causes edge differences; interior should match
         assert torch.allclose(out[:, 1:], wav[:, 1:], atol=1e-4)
 
     def test_enhance_waveform_stereo(self) -> None:
@@ -44,11 +41,9 @@ class TestEnhancer:
         wav = torch.randn(2, 16000) * 0.1
         out = enh.enhance_waveform(wav)
         assert out.shape == wav.shape
-        # Overlap-add windowing causes edge differences; interior should match
         assert torch.allclose(out[:, 1:], wav[:, 1:], atol=1e-4)
 
     def test_enhance_waveform_long_audio(self) -> None:
-        """Overlap-add with multiple chunks."""
         model = IdentityModel()
         enh = Enhancer(model, sample_rate=16000, chunk_seconds=0.3, hop_seconds=0.1)
         wav = torch.randn(1, 48000) * 0.1
@@ -68,7 +63,6 @@ class TestEnhancer:
         assert output_path.exists()
 
         loaded, _ = sf.read(str(output_path))
-        # Mono WAV may be 1D or 2D depending on sf.write
         assert loaded.ndim in (1, 2)
 
     def test_from_checkpoint(self, tmp_path: Path) -> None:
@@ -108,7 +102,6 @@ class TestEnhancer:
         assert out.shape == wav.shape
 
     def test_enhance_file_resamples(self, tmp_path: Path) -> None:
-        """Input at different SR should be resampled."""
         model = IdentityModel()
         enh = Enhancer(model, sample_rate=16000, chunk_seconds=0.5, hop_seconds=0.25)
 

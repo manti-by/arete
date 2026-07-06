@@ -6,13 +6,11 @@ import numpy as np
 import soundfile as sf
 import torch
 
-from audio_upscaler.data.degradations import Degrader
+from arete.services.degradation import Degrader
 
 
 def _mock_subprocess_run(*args, **kwargs) -> subprocess.CompletedProcess:
-    """Mock ffmpeg: return dummy WAV data for decode step, no-op for encode."""
     cmd = args[0] if args else []
-    # Detect decode step (output to stdout via -f wav -)
     is_decode = "-f" in cmd and "wav" in cmd and "-" in cmd
     if is_decode:
         sr = 22050
@@ -48,7 +46,6 @@ class TestDegrader:
         wav = torch.randn(2, 22050)
         with patch.object(subprocess, "run", _mock_subprocess_run):
             degraded = d.degrade(wav)
-        # Mock ffmpeg returns mono; real ffmpeg preserves channels
         assert degraded.shape[-1] == wav.shape[-1]
 
     def test_degrade_lowpass(self) -> None:
@@ -73,7 +70,6 @@ class TestDegrader:
         assert degraded.shape[-1] == 44100
 
     def test_degrade_identity_no_random(self) -> None:
-        """Without any degradation enabled, output should be close to input."""
         d = Degrader(
             sample_rate=22050,
             prob_lowpass=0.0,
