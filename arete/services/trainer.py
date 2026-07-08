@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time as time_mod
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 from arete.losses import CombinedAudioLoss
 from arete.models import EMA
@@ -79,28 +81,52 @@ class Trainer:
         self.global_step = 0
 
     def fit(self) -> None:
+        n_train = len(self.train_loader)
+        n_val = len(self.val_loader)
+        logger.info(
+            "Starting training for %d epochs (%d train / %d val batches per epoch)",
+            self.epochs,
+            n_train,
+            n_val,
+        )
+        start_time = time_mod.time()
+
         for epoch in range(1, self.epochs + 1):
+            t0 = time_mod.time()
             train_losses = self.train_epoch(epoch)
             self.scheduler.step()
+            t_train = time_mod.time() - t0
 
             self.writer.add_scalar("lr", self.optimizer.param_groups[0]["lr"], epoch)
             for k, v in train_losses.items():
                 self.writer.add_scalar(f"train/{k}", v, epoch)
 
+            val_losses: dict[str, float] | None = None
+            t_val = 0.0
             if epoch % self.val_every == 0:
+                t0 = time_mod.time()
                 val_losses = self.val_epoch(epoch)
+                t_val = time_mod.time() - t0
                 for k, v in val_losses.items():
                     self.writer.add_scalar(f"val/{k}", v, epoch)
-                logger.info(
-                    "Epoch %d | train_loss=%.4f | val_loss=%.4f",
-                    epoch,
-                    train_losses["total"],
-                    val_losses["total"],
-                )
 
             if epoch % self.save_every == 0:
                 self.save_checkpoint(epoch)
 
+            elapsed = time_mod.time() - start_time
+            remaining = elapsed / epoch * (self.epochs - epoch)
+            log = (
+                f"Epoch {epoch}/{self.epochs} | train_loss={train_losses['total']:.4f}"
+                f" | lr={self.optimizer.param_groups[0]['lr']:.2e}"
+                f" | time={t_train:.1f}s"
+            )
+            if val_losses is not None:
+                log += f" | val_loss={val_losses['total']:.4f} | val_time={t_val:.1f}s"
+            log += f" | elapsed={elapsed:.1f}s | remaining≈{remaining:.0f}s"
+            logger.info(log)
+
+        total = time_mod.time() - start_time
+        logger.info("Training complete in %.1fs (%.1f min)", total, total / 60)
         self.save_checkpoint("final")
         self.writer.close()
 
@@ -109,7 +135,8 @@ class Trainer:
         accum: dict[str, float] = {}
         n = 0
 
-        for degraded, clean in self.train_loader:
+        pbar = tqdm(self.train_loader, desc=f"Train {epoch}/{self.epochs}", leave=False)
+        for degraded, clean in pbar:
             degraded = degraded.to(self.device)
             clean = clean.to(self.device)
 
@@ -133,6 +160,7 @@ class Trainer:
                 accum[k] = accum.get(k, 0.0) + v
             n += 1
             self.global_step += 1
+            pbar.set_postfix(loss=f"{components.get('total', loss.item()):.4f}")
 
         return {k: v / n for k, v in accum.items()}
 
@@ -143,7 +171,8 @@ class Trainer:
         accum: dict[str, float] = {}
         n = 0
 
-        for degraded, clean in self.val_loader:
+        pbar = tqdm(self.val_loader, desc=f"Val  {epoch}/{self.epochs}", leave=False)
+        for degraded, clean in pbar:
             degraded = degraded.to(self.device)
             clean = clean.to(self.device)
             pred = eval_model(degraded)
@@ -151,6 +180,7 @@ class Trainer:
             for k, v in components.items():
                 accum[k] = accum.get(k, 0.0) + v
             n += 1
+            pbar.set_postfix(loss=f"{components.get('total', 0.0):.4f}")
 
         return {k: v / n for k, v in accum.items()}
 

@@ -16,8 +16,9 @@ except ImportError:
 def highband_loss(pred: torch.Tensor, target: torch.Tensor, n_fft: int, hop: int, cutoff_bin: int) -> torch.Tensor:
     p = pred.squeeze(1)
     t = target.squeeze(1)
-    p_spec = torch.stft(p, n_fft, hop, return_complex=True).abs()
-    t_spec = torch.stft(t, n_fft, hop, return_complex=True).abs()
+    window = torch.hann_window(n_fft, device=p.device)
+    p_spec = torch.stft(p, n_fft, hop, window=window, return_complex=True).abs()
+    t_spec = torch.stft(t, n_fft, hop, window=window, return_complex=True).abs()
     return F.l1_loss(p_spec[:, cutoff_bin:], t_spec[:, cutoff_bin:])
 
 
@@ -31,8 +32,9 @@ class FallbackMRSTFTLoss(nn.Module):
         target = target.squeeze(1)
         losses = []
         for n_fft, hop, win in self.params:
-            p_spec = torch.stft(pred, n_fft, hop, win, return_complex=True).abs()
-            t_spec = torch.stft(target, n_fft, hop, win, return_complex=True).abs()
+            window = torch.hann_window(win, device=pred.device)
+            p_spec = torch.stft(pred, n_fft, hop, win, window=window, return_complex=True).abs()
+            t_spec = torch.stft(target, n_fft, hop, win, window=window, return_complex=True).abs()
             losses.append(F.l1_loss(p_spec, t_spec))
         return torch.stack(losses).mean()
 

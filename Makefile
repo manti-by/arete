@@ -19,11 +19,11 @@ test:
 test-cov:
 	uv run pytest tests/ --cov=arete --cov-report=term-missing --cov-report=html
 
-train:
-	uv run python main.py train --data-dir data/raw --model-type waveform
-
 info:
 	uv run python main.py info
+
+train:
+	uv run python main.py train --data-dir data/raw --model-type waveform
 
 enhance:
 	uv run python main.py enhance --checkpoint <ckpt> --input <file> --output <out>

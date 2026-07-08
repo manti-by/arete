@@ -77,7 +77,7 @@ LOSS: dict = {
 
 TRAINING: dict = {
     "epochs": 100,
-    "batch_size": 16,
+    "batch_size": 4,
     "learning_rate": 3.0e-4,
     "lr_scheduler": "cosine",
     "warmup_epochs": 5,
