@@ -4,7 +4,7 @@ version = "0.2.1"
 readme = "README.md"
 description = "Audio restoration / bandwidth extension model (DSEE-like) for music"
 requires-python = ">=3.13"
-license = { text = "GNU Affero General Public License v3.0" }
+license = { text = "AGPL-3.0" }
 authors = [{ name = "Alexander Chaika" }]
 
 dependencies = [
