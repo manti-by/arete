@@ -6,14 +6,14 @@ Arete is an audio restoration / bandwidth extension model (DSEE-like) for music,
 
 ## Project Structure
 
-- `main.py`: CLI entry point (argparse: train / enhance / info)
-- `arete/settings.py`: Core configuration constants
+- `main.py`: CLI entry point (argparse: train / enhance / validate / info)
+- `arete/train.py`, `arete/enhance.py`, `arete/validate.py`, `arete/info.py`: Command handlers
+- `arete/settings.py`: Core configuration constants (hyperparameter source of truth)
 - `arete/library/`: Pure data layer (dataclasses, TypedDicts, exceptions). No I/O.
 - `arete/models/`: Neural network architectures (WaveformUNet, STFTUNet, EMA)
-- `arete/services/`: External system integrations (Degrader, Enhancer, Trainer)
+- `arete/services/`: External system integrations (Degrader, Enhancer, Trainer, validation)
 - `arete/data/`: Dataset and data loading utilities
 - `arete/baselines/`: Classical DSP baselines for comparison
-- `arete/settings.py`: Hyperparameter source of truth
 - `tests/`: Comprehensive test suite
 - `data/raw/`: Place lossless audio tracks here
 - `data/degraded/`: Optional pre-degraded cache
@@ -31,6 +31,7 @@ make update
 ```bash
 uv run python main.py train --data-dir data/raw
 uv run python main.py enhance --checkpoint <ckpt> --input <file> --output <out>
+uv run python main.py validate --data-dir data/raw
 uv run python main.py info
 ```
 
@@ -41,6 +42,8 @@ uv run ruff check .     # lint only
 uv run ruff format .    # format only
 uv run ty check         # type check only
 ```
+
+> **Note:** `make check` also stages all tracked files via `git add .` before running checks.
 
 ### Test
 ```bash
@@ -92,4 +95,4 @@ make test-cov
 
 ## Config
 
-Hyperparameter source of truth: `arete/settings.py`. All training and inference uses these constants. Environment overrides via `ARETE_CONFIG` env var.
+Hyperparameter source of truth: `arete/settings.py`. All training and inference uses these constants. Environment override for log file via `LOG_PATH` env var.

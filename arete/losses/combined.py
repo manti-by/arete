@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,9 +6,9 @@ import torch.nn.functional as F
 try:
     from auraloss.freq import MelSTFTLoss, MultiResolutionSTFTLoss
 
-    _AURALOSS_AVAILABLE = True
+    AURALOSS_AVAILABLE = True
 except ImportError:
-    _AURALOSS_AVAILABLE = False
+    AURALOSS_AVAILABLE = False
 
 
 def highband_loss(pred: torch.Tensor, target: torch.Tensor, n_fft: int, hop: int, cutoff_bin: int) -> torch.Tensor:
@@ -72,7 +70,7 @@ class CombinedAudioLoss(nn.Module):
         self.hb_n_fft = fft_sizes[-1]
         self.hb_hop = hop_sizes[-1]
 
-        if _AURALOSS_AVAILABLE:
+        if AURALOSS_AVAILABLE:
             self.mr_stft_loss = MultiResolutionSTFTLoss(
                 fft_sizes=fft_sizes,
                 hop_sizes=hop_sizes,

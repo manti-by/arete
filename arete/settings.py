@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from arete.library.types import AudioConfig, DataConfig, DegradationConfig, LossConfig, ModelConfig, TrainingConfig
+
 
 BASE_PATH = Path(__file__).resolve().parent.parent
 
@@ -33,14 +35,14 @@ LOGGING: dict = {
     },
 }
 
-AUDIO: dict = {
+AUDIO: AudioConfig = {
     "sample_rate": 44100,
     "channels": 1,
     "chunk_seconds": 2.5,
     "hop_seconds": 1.0,
 }
 
-DEGRADATIONS: dict = {
+DEGRADATIONS: DegradationConfig = {
     "mp3_bitrates": [64, 96, 128, 192],
     "aac_bitrates": [64, 96, 128],
     "opus_bitrates": [48, 64, 96],
@@ -52,7 +54,7 @@ DEGRADATIONS: dict = {
     "clipping_threshold": 0.9,
 }
 
-MODEL: dict = {
+MODEL: ModelConfig = {
     "name": "WaveformUNet",
     "in_channels": 1,
     "base_channels": 32,
@@ -62,8 +64,7 @@ MODEL: dict = {
     "ema_decay": 0.999,
 }
 
-# Loss
-LOSS: dict = {
+LOSS: LossConfig = {
     "lambda_l1": 0.3,
     "lambda_mr_stft": 0.5,
     "lambda_mel": 0.2,
@@ -75,7 +76,7 @@ LOSS: dict = {
     "mel_n_mels": 80,
 }
 
-TRAINING: dict = {
+TRAINING: TrainingConfig = {
     "epochs": 100,
     "batch_size": 4,
     "learning_rate": 3.0e-4,
@@ -90,7 +91,7 @@ TRAINING: dict = {
     "checkpoint_dir": "checkpoints/",
 }
 
-DATA: dict = {
+DATA: DataConfig = {
     "train_split": 0.9,
     "seed": 42,
 }

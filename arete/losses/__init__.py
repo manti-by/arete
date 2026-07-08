@@ -1,4 +1,4 @@
 from arete.losses.combined import CombinedAudioLoss
 
 
-__all__ = ["CombinedAudioLoss"]
+__all__ = ("CombinedAudioLoss",)

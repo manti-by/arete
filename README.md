@@ -1,4 +1,4 @@
-# arete
+# Arete
 
 **DSEE-like audio restoration for music** — supervised neural model that restores high-frequency detail and removes compression artifacts from lossy audio (MP3 / AAC / Opus).
 
@@ -7,6 +7,7 @@ Trained on pairs of `(degraded, clean)` audio generated on-the-fly from your los
 ## Motivation
 
 Sony DSEE restores detail lost during compression. arete implements the same idea as a research/pet project:
+
 - Input: compressed / artifact-ridden audio
 - Output: restored waveform with recovered high-frequency content
 - Training: synthetic degradation of your own lossless library
@@ -23,6 +24,12 @@ cd arete && make install
 Place lossless tracks in `data/raw/`, then:
 
 ```bash
+# Validate your dataset
+uv run python main.py validate --data-dir data/raw
+
+# Print model parameter counts
+uv run python main.py info
+
 # Train a model
 uv run python main.py train --data-dir data/raw --model-type waveform --device cuda
 
@@ -41,4 +48,3 @@ make test-cov    # tests with coverage
 ## License
 
 AGPL-3.0
-

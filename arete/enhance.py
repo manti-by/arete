@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import argparse
 from pathlib import Path
 
@@ -18,7 +16,11 @@ def cmd_enhance(args: argparse.Namespace) -> None:
             kernel_size=settings.MODEL["kernel_size"],
         )
     else:
-        model = STFTUNet(sample_rate=settings.AUDIO["sample_rate"], base_ch=settings.MODEL["base_channels"])
+        model = STFTUNet(
+            sample_rate=settings.AUDIO["sample_rate"],
+            base_ch=settings.MODEL["base_channels"],
+            depth=max(1, settings.MODEL["depth"] - 1),
+        )
 
     if args.output is None:
         p = Path(args.input)

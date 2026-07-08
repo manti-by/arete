@@ -61,7 +61,7 @@ def cmd_train(args: argparse.Namespace) -> None:
         model = STFTUNet(
             sample_rate=settings.AUDIO["sample_rate"],
             base_ch=settings.MODEL["base_channels"],
-            depth=settings.MODEL["depth"],
+            depth=max(1, settings.MODEL["depth"] - 1),
         )
 
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)

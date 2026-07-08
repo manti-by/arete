@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import io
 import random
 import subprocess
@@ -121,19 +119,7 @@ class Degrader:
                 Path(tmp_in.name).unlink(missing_ok=True)
                 raise
 
-        cmd2 = [
-            "ffmpeg",
-            "-y",
-            "-i",
-            tmp_path,
-            "-ar",
-            str(self.sample_rate),
-            "-ac",
-            str(n_channels),
-            "-f",
-            "wav",
-            "-",
-        ]
+        cmd2 = ["ffmpeg", "-y", "-i", tmp_path, "-ar", str(self.sample_rate), "-ac", str(n_channels), "-f", "wav", "-"]
         try:
             result = subprocess.run(cmd2, capture_output=True, check=True)
         except Exception:
