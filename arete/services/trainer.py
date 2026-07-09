@@ -135,30 +135,34 @@ class Trainer:
 
         pbar = tqdm(self.train_loader, desc=f"Train {epoch}/{self.epochs}", leave=False)
         for degraded, clean in pbar:
-            degraded = degraded.to(self.device)
-            clean = clean.to(self.device)
+            try:
+                degraded = degraded.to(self.device)
+                clean = clean.to(self.device)
 
-            self.optimizer.zero_grad()
+                self.optimizer.zero_grad()
 
-            amp_device = "cuda" if "cuda" in self.device else self.device
-            with autocast(device_type=amp_device, enabled=self.scaler.is_enabled()):
-                pred = self.model(degraded)
-                loss, components = self.criterion(pred, clean)
+                amp_device = "cuda" if "cuda" in self.device else self.device
+                with autocast(device_type=amp_device, enabled=self.scaler.is_enabled()):
+                    pred = self.model(degraded)
+                    loss, components = self.criterion(pred, clean)
 
-            self.scaler.scale(loss).backward()
-            self.scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
+                self.scaler.scale(loss).backward()
+                self.scaler.unscale_(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
 
-            if self.ema:
-                self.ema.update(self.model)
+                if self.ema:
+                    self.ema.update(self.model)
 
-            for k, v in components.items():
-                accum[k] = accum.get(k, 0.0) + v
-            n += 1
-            self.global_step += 1
-            pbar.set_postfix(loss=f"{components.get('total', loss.item()):.4f}")
+                for k, v in components.items():
+                    accum[k] = accum.get(k, 0.0) + v
+                n += 1
+                self.global_step += 1
+                pbar.set_postfix(loss=f"{components.get('total', loss.item()):.4f}")
+            except RuntimeError as e:
+                logger.warning("Skipping train batch due to error: %s", e)
+                self.optimizer.zero_grad()
 
         return {k: v / n for k, v in accum.items()}
 
@@ -171,14 +175,17 @@ class Trainer:
 
         pbar = tqdm(self.val_loader, desc=f"Val  {epoch}/{self.epochs}", leave=False)
         for degraded, clean in pbar:
-            degraded = degraded.to(self.device)
-            clean = clean.to(self.device)
-            pred = eval_model(degraded)
-            _, components = self.criterion(pred, clean)
-            for k, v in components.items():
-                accum[k] = accum.get(k, 0.0) + v
-            n += 1
-            pbar.set_postfix(loss=f"{components.get('total', 0.0):.4f}")
+            try:
+                degraded = degraded.to(self.device)
+                clean = clean.to(self.device)
+                pred = eval_model(degraded)
+                _, components = self.criterion(pred, clean)
+                for k, v in components.items():
+                    accum[k] = accum.get(k, 0.0) + v
+                n += 1
+                pbar.set_postfix(loss=f"{components.get('total', 0.0):.4f}")
+            except RuntimeError as e:
+                logger.warning("Skipping val batch due to error: %s", e)
 
         return {k: v / n for k, v in accum.items()}
 

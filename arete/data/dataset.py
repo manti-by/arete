@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -8,6 +9,8 @@ from torch.utils.data import Dataset
 
 from arete.services.degradation import Degrader
 
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".wav", ".flac", ".aiff", ".aif", ".mp4", ".m4a"}
 
@@ -44,11 +47,22 @@ class AudioPairDataset(Dataset):
 
         self._index = self.build_index()
 
+        if not self._index:
+            raise ValueError(f"Could not build any valid chunks from files under {root!r}")
+
     def build_index(self) -> list[tuple[int, int]]:
         index: list[tuple[int, int]] = []
         for fi, path in enumerate(self.files):
-            sinfo = sf.info(str(path))
-            n_samples = int(sinfo.frames * self.sample_rate / sinfo.samplerate)
+            try:
+                sinfo = sf.info(str(path))
+                n_samples = int(sinfo.frames * self.sample_rate / sinfo.samplerate)
+            except (OSError, ValueError):
+                try:
+                    waveform, _ = torchaudio.load(str(path))
+                    n_samples = waveform.shape[-1]
+                except RuntimeError:
+                    logger.warning("Skipping unreadable file: %s", path)
+                    continue
             starts = range(0, max(1, n_samples - self.chunk_len), self.chunk_len)
             index.extend((fi, s) for s in starts)
         return index
@@ -60,7 +74,12 @@ class AudioPairDataset(Dataset):
         fi, start = self._index[index]
         path = self.files[fi]
 
-        waveform, sr = torchaudio.load(str(path))
+        try:
+            waveform, sr = torchaudio.load(str(path))
+        except RuntimeError:
+            logger.warning("Failed to decode %s, returning silence", path)
+            waveform = torch.zeros(1, self.chunk_len)
+            sr = self.sample_rate
 
         if sr != self.sample_rate:
             waveform = torchaudio.functional.resample(waveform, sr, self.sample_rate)
